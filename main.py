@@ -1,68 +1,101 @@
 import os
 import json
+import random
+import requests
+import time
 import pandas as pd
-import gspread
-from google.oauth2.service_account import Credentials
 from pytrends.request import TrendReq
+from oauth2client.service_account import ServiceAccountCredentials
+import gspread
 
-# Define Google credentials
+# 🚨 Telegram Alert Sender
+def send_telegram_alert(message):
+    BOT_TOKEN = os.environ['TELEGRAM_BOT_TOKEN']
+    CHAT_ID = os.environ['TELEGRAM_CHAT_ID']
+    url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
+    payload = {
+        'chat_id': CHAT_ID,
+        'text': message
+    }
+    try:
+        requests.post(url, data=payload)
+    except Exception as e:
+        print(f"Failed to send Telegram alert: {e}")
+
+# 🚀 Set up Google Service
 SERVICE_ACCOUNT_INFO = json.loads(os.environ['GOOGLE_SERVICE_ACCOUNT_JSON'])
-credentials = Credentials.from_service_account_info(
-    SERVICE_ACCOUNT_INFO,
-    scopes=[
-        "https://www.googleapis.com/auth/spreadsheets",
-        "https://www.googleapis.com/auth/drive",
-    ],
-)
+
+scope = [
+    'https://www.googleapis.com/auth/spreadsheets',
+    'https://www.googleapis.com/auth/drive'
+]
+
+credentials = ServiceAccountCredentials.from_json_keyfile_dict(
+    SERVICE_ACCOUNT_INFO, scopes=scope)
+
 client = gspread.authorize(credentials)
 
-# Define Google Sheet details
-spreadsheet_id = os.environ['SPREADSHEET_ID']
-worksheet_name = os.environ.get('WORKSHEET_NAME', 'Sheet1')  # Default to 'Sheet1'
+# 🚀 Connect to your Google Sheet
+spreadsheet_id = os.environ['GOOGLE_SHEET_ID']
+sheet = client.open_by_key(spreadsheet_id).sheet1
 
-# Get worksheet
-sheet = client.open_by_key(spreadsheet_id).worksheet(worksheet_name)
+# 🚀 Setup PyTrends
+pytrends = TrendReq(hl='en-US', tz=360)
 
-# Fetch keywords from pytrends
-all_rising_keywords = []
+# Define countries and niches
+countries = ['US', 'GB', 'AE', 'AU', 'IN']
+niches = [
+    'AI automation',
+    'digital marketing',
+    'AI tools',
+    'real estate technology',
+    'fintech innovations',
+    'freelancer marketing',
+    'medical technology',
+    'biotech startups',
+    'saas marketing',
+    'cybersecurity',
+    'law firms digital',
+    'education technology',
+    'logistics automation',
+    'travel technology'
+]
 
-# Set up pytrends
-pytrends = TrendReq()
+# 🚀 Start fetching
+all_keywords = []
 
-# Load countries and niches from environment variables
-COUNTRIES = os.environ.get('COUNTRY', 'US,GB,IN').split(',')
-NICHES = os.environ.get('NICHES', 'technology,marketing').split(',')
-
-# Loop through all combinations
-for country in COUNTRIES:
-    for niche in NICHES:
-        search_topic = f"{niche} {country}"
-        pytrends.build_payload([search_topic], timeframe='now 7-d', geo=country)
-        try:
+try:
+    for country in countries:
+        for niche in niches:
+            pytrends.build_payload([niche], cat=0, timeframe='now 7-d', geo=country)
             related_queries = pytrends.related_queries()
-            if (related_queries and 
-                'default' in related_queries and 
-                'rankedList' in related_queries['default'] and
-                len(related_queries['default']['rankedList']) > 0 and
-                'rankedKeyword' in related_queries['default']['rankedList'][0]):
-                print(f"Related keywords found for {search_topic}.")
-            else:
-                print(f"No related keywords found for {search_topic}.")
-                continue  # Skip if no related keywords
-        except Exception as e:
-            print(f"Error fetching related queries for {search_topic}: {e}")
-            continue
 
-        if search_topic in related_queries and 'rising' in related_queries[search_topic]:
-            rising = related_queries[search_topic]['rising']
-            if rising is not None:
-                all_rising_keywords.extend(rising['query'].tolist())
+            try:
+                keywords = related_queries[niche]['top']
+                if keywords is not None:
+                    top_keywords = keywords.sort_values(by='value', ascending=False)['query'].tolist()
+                    all_keywords.extend(top_keywords[:5])  # Fetch top 5 related keywords
+                else:
+                    print(f"No related keywords found for niche: {niche} in country: {country}")
+            except Exception as e_inner:
+                print(f"Error processing niche {niche} for country {country}: {e_inner}")
+                send_telegram_alert(f"🚨 Error processing niche {niche} in {country}: {str(e_inner)}")
 
-# Remove duplicates
-all_rising_keywords = list(set(all_rising_keywords))
+except Exception as e_outer:
+    print(f"Error fetching related queries: {e_outer}")
+    send_telegram_alert(f"🚨 Feeder crashed while fetching keywords: {str(e_outer)}")
+    all_keywords = []
 
-# Push to Google Sheet
-for keyword in all_rising_keywords:
-    sheet.append_row([keyword])
+# 🚀 Remove duplicates and shuffle
+all_keywords = list(set(all_keywords))
+random.shuffle(all_keywords)
 
-print(f"✅ Successfully updated {len(all_rising_keywords)} keywords to Google Sheet.")
+# 🚀 Upload to Google Sheet
+if all_keywords:
+    sheet.clear()
+    for idx, keyword in enumerate(all_keywords, start=1):
+        sheet.update_cell(idx, 1, keyword)
+    print(f"✅ Successfully updated {len(all_keywords)} keywords to Google Sheet.")
+else:
+    print("⚠️ No keywords fetched to update.")
+    
