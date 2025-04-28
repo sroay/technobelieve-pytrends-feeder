@@ -49,7 +49,19 @@ all_rising_keywords = []
 
 for topic in seed_topics:
     pytrends.build_payload([topic], timeframe='now 7-d')
+    try:
     related_queries = pytrends.related_queries()
+    if related_queries and 'default' in related_queries and 'rankedList' in related_queries['default']:
+        ranked_list = related_queries['default']['rankedList']
+        if ranked_list and len(ranked_list) > 0 and 'rankedKeyword' in ranked_list[0]:
+            # Your normal logic here to use ranked_keyword
+            print("Related keywords found.")
+        else:
+            print("No related keywords found for this search.")
+    else:
+        print("No data found for this keyword in this region.")
+except Exception as e:
+    print(f"Error fetching related queries: {e}")
     if topic in related_queries:
         rising = related_queries[topic]['rising']
         if rising is not None:
