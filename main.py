@@ -67,7 +67,7 @@ all_keywords = []
 try:
     for country in countries:
         for niche in niches:
-            pytrends.build_payload([niche], cat=0, timeframe='now 7-d', geo=country)
+            pytrends.build_payload([niche], cat=0, timeframe='now 7-d', geo="")  # <-- empty geo (simulate crash)
             related_queries = pytrends.related_queries()
 
             try:
