@@ -1,40 +1,18 @@
-from pytrends.request import TrendReq
-import pandas as pd
-import gspread
-from google.oauth2.service_account import Credentials
-import json
 import os
+import json
+import time
+from pytrends.request import TrendReq
+import gspread
+from oauth2client.service_account import ServiceAccountCredentials
 
-# Setup PyTrends
+# Setup pytrends
 pytrends = TrendReq(hl='en-US', tz=360)
 
-# Define your seed topics here
-seed_topics = [
-    "AI marketing for real estate",
-    "automation for fintech companies",
-    "AI lead generation for ecommerce stores",
-    "automation tools for freelancers",
-    "AI bots for healthcare clinics",
-    "automation CRM for dentists",
-    "AI marketing for lawyers",
-    "AI automation for online courses",
-    "AI tools for marketing agencies",
-    "AI customer service for hotels",
-    "AI CRM for insurance agents",
-    "industrial automation using AI",
-    "AI marketing for construction businesses",
-    "AI onboarding automation for SaaS",
-    "AI marketing automation for SMEs",
-    "latest AI trends",
-    "GPT-4 Turbo updates",
-    "LLM models for businesses",
-    "AI automation agents"
-]
-
-# Connect to Google Sheets
+# Setup Google Sheets
+scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
 SERVICE_ACCOUNT_INFO = json.loads(os.environ['GOOGLE_SERVICE_ACCOUNT_JSON'])
-scopes = ["https://www.googleapis.com/auth/spreadsheets"]
-credentials = Credentials.from_service_account_info(SERVICE_ACCOUNT_INFO, scopes=scopes)
+
+credentials = ServiceAccountCredentials.from_json_keyfile_dict(SERVICE_ACCOUNT_INFO, scope)
 client = gspread.authorize(credentials)
 
 # Define Google Sheet details
@@ -47,31 +25,38 @@ sheet = client.open_by_key(spreadsheet_id).worksheet(worksheet_name)
 # Fetch keywords from pytrends
 all_rising_keywords = []
 
+# Read your environment variables
+seed_topics = os.environ.get('NICHES', 'technology,finance,health').split(',')
+countries = os.environ.get('COUNTRY', 'US').split(',')
+spreadsheet_tab = os.environ.get('SPREADSHEET_TAB', 'Sheet1')
+
 for topic in seed_topics:
     pytrends.build_payload([topic], timeframe='now 7-d')
+
     try:
-    related_queries = pytrends.related_queries()
-    if related_queries and 'default' in related_queries and 'rankedList' in related_queries['default']:
-        ranked_list = related_queries['default']['rankedList']
-        if ranked_list and len(ranked_list) > 0 and 'rankedKeyword' in ranked_list[0]:
-            # Your normal logic here to use ranked_keyword
-            print("Related keywords found.")
+        related_queries = pytrends.related_queries()
+
+        if related_queries and 'default' in related_queries and 'rankedList' in related_queries['default']:
+            ranked_list = related_queries['default']['rankedList']
+            if ranked_list and len(ranked_list) > 0 and 'rankedKeyword' in ranked_list[0]:
+                print("Related keywords found.")
+                # Your logic here (optional if needed)
+            else:
+                print("No related keywords found for this search.")
         else:
-            print("No related keywords found for this search.")
-    else:
-        print("No data found for this keyword in this region.")
-except Exception as e:
-    print(f"Error fetching related queries: {e}")
-    if topic in related_queries:
-        rising = related_queries[topic]['rising']
-        if rising is not None:
-            all_rising_keywords.extend(rising['query'].tolist())
+            print("No data found for this keyword in this region.")
+
+    except Exception as e:
+        print(f"Error fetching related queries: {e}")
+        related_queries = pytrends.related_queries()
+        if related_queries and topic in related_queries:
+            rising = related_queries[topic].get('rising')
+            if rising is not None:
+                all_rising_keywords.extend(rising['query'].tolist())
 
 # Remove duplicates
 all_rising_keywords = list(set(all_rising_keywords))
 
 # Push to Google Sheet
 for keyword in all_rising_keywords:
-    sheet.append_row([keyword, "Pending", "", "", ""])
-
-print(f"Inserted {len(all_rising_keywords)} new keywords successfully!")
+    sheet.append_row([keyword])
