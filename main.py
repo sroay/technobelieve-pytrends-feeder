@@ -71,8 +71,8 @@ try:
             pytrends.build_payload([niche], cat=0, timeframe='now 7-d', geo=country)
             related_queries = pytrends.related_queries()
 
-    # 💥 Simulate crash AFTER build_payload and related_queries
-    raise Exception("💥 Simulated Crash for Testing Telegram Alert")
+            # 💥 Simulate crash AFTER build_payload and related_queries
+            raise Exception("💥 Simulated Crash for Testing Telegram Alert")
             
             try:
                 keywords = related_queries[niche]['top']
