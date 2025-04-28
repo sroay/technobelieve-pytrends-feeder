@@ -64,8 +64,6 @@ niches = [
 # 🚀 Start fetching
 all_keywords = []
 
-# Simulate Crash BEFORE loop starts
-raise Exception("💥 Simulated Crash for Testing Telegram Alert")
 
 try:
     for country in countries:
@@ -73,6 +71,9 @@ try:
             pytrends.build_payload([niche], cat=0, timeframe='now 7-d', geo=country)
             related_queries = pytrends.related_queries()
 
+    # 💥 Simulate crash AFTER build_payload and related_queries
+    raise Exception("💥 Simulated Crash for Testing Telegram Alert")
+            
             try:
                 keywords = related_queries[niche]['top']
                 if keywords is not None:
