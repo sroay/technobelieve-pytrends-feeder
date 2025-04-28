@@ -1,69 +1,34 @@
 import os
 import json
-import random
 import requests
-import time
 import pandas as pd
 from pytrends.request import TrendReq
-from oauth2client.service_account import ServiceAccountCredentials
-import gspread
 
-# 🚨 Telegram Alert Sender
+# Initialize pytrends
+pytrends = TrendReq()
+
+# Telegram alert setup
+TELEGRAM_BOT_TOKEN = os.environ.get('TELEGRAM_BOT_TOKEN')
+TELEGRAM_CHAT_ID = os.environ.get('TELEGRAM_CHAT_ID')
+
 def send_telegram_alert(message):
-    BOT_TOKEN = os.environ['TELEGRAM_BOT_TOKEN']
-    CHAT_ID = os.environ['TELEGRAM_CHAT_ID']
-    url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
-    payload = {
-        'chat_id': CHAT_ID,
-        'text': message
-    }
-    try:
-        requests.post(url, data=payload)
-    except Exception as e:
-        print(f"Failed to send Telegram alert: {e}")
+    if TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID:
+        url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
+        payload = {
+            'chat_id': TELEGRAM_CHAT_ID,
+            'text': message
+        }
+        try:
+            requests.post(url, data=payload)
+        except Exception as e:
+            print(f"Failed to send Telegram alert: {e}")
 
-# 🚀 Set up Google Service
-SERVICE_ACCOUNT_INFO = json.loads(os.environ['GOOGLE_SERVICE_ACCOUNT_JSON'])
-
-scope = [
-    'https://www.googleapis.com/auth/spreadsheets',
-    'https://www.googleapis.com/auth/drive'
-]
-
-credentials = ServiceAccountCredentials.from_json_keyfile_dict(
-    SERVICE_ACCOUNT_INFO, scopes=scope)
-
-client = gspread.authorize(credentials)
-
-# 🚀 Connect to your Google Sheet
-spreadsheet_id = os.environ['SPREADSHEET_ID']
-sheet = client.open_by_key(spreadsheet_id).sheet1
-
-# 🚀 Setup PyTrends
-pytrends = TrendReq(hl='en-US', tz=360)
-
-# Define countries and niches
-countries = ['US', 'GB', 'AE', 'AU', 'IN']
-niches = [
-    'AI automation',
-    'digital marketing',
-    'AI tools',
-    'real estate technology',
-    'fintech innovations',
-    'freelancer marketing',
-    'medical technology',
-    'biotech startups',
-    'saas marketing',
-    'cybersecurity',
-    'law firms digital',
-    'education technology',
-    'logistics automation',
-    'travel technology'
-]
+# Load environment variables
+countries = json.loads(os.environ.get('COUNTRIES', '["US"]'))
+niches = json.loads(os.environ.get('NICHES', '["travel technology"]'))
 
 # 🚀 Start fetching
 all_keywords = []
-
 
 try:
     for country in countries:
@@ -73,7 +38,7 @@ try:
 
             # 💥 Simulate crash AFTER build_payload and related_queries
             raise Exception("💥 Simulated Crash for Testing Telegram Alert")
-            
+
             try:
                 keywords = related_queries[niche]['top']
                 if keywords is not None:
@@ -84,7 +49,6 @@ try:
             except Exception as e_inner:
                 print(f"Error processing niche {niche} for country {country}: {e_inner}")
                 send_telegram_alert(f"🚨 Error processing niche {niche} in {country}: {str(e_inner)}")
-
 except Exception as e_outer:
     print(f"Error fetching related queries: {e_outer}")
     send_telegram_alert(f"🚨 Feeder crashed while fetching keywords: {str(e_outer)}")
@@ -92,14 +56,5 @@ except Exception as e_outer:
 
 # 🚀 Remove duplicates and shuffle
 all_keywords = list(set(all_keywords))
-random.shuffle(all_keywords)
 
-# 🚀 Upload to Google Sheet
-if all_keywords:
-    sheet.clear()
-    for idx, keyword in enumerate(all_keywords, start=1):
-        sheet.update_cell(idx, 1, keyword)
-    print(f"✅ Successfully updated {len(all_keywords)} keywords to Google Sheet.")
-else:
-    print("⚠️ No keywords fetched to update.")
-    
+# 🚀 (Later parts: uploading to sheet, etc.)
