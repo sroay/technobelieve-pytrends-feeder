@@ -36,7 +36,7 @@ credentials = ServiceAccountCredentials.from_json_keyfile_dict(
 client = gspread.authorize(credentials)
 
 # 🚀 Connect to your Google Sheet
-spreadsheet_id = os.environ['GOOGLE_SHEET_ID']
+spreadsheet_id = os.environ['SPREADSHEET_ID']
 sheet = client.open_by_key(spreadsheet_id).sheet1
 
 # 🚀 Setup PyTrends
