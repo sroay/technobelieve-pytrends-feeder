@@ -1,18 +1,19 @@
 import os
 import json
-import time
-from pytrends.request import TrendReq
+import pandas as pd
 import gspread
-from oauth2client.service_account import ServiceAccountCredentials
+from google.oauth2.service_account import Credentials
+from pytrends.request import TrendReq
 
-# Setup pytrends
-pytrends = TrendReq(hl='en-US', tz=360)
-
-# Setup Google Sheets
-scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
-SERVICE_ACCOUNT_INFO = json.loads(os.environ['GOOGLE_SERVICE_ACCOUNT_JSON'])
-
-credentials = ServiceAccountCredentials.from_json_keyfile_dict(SERVICE_ACCOUNT_INFO, scope)
+# Define Google credentials
+SERVICE_ACCOUNT_INFO = json.loads(os.environ['GOOGLE_SERVICE_JSON'])
+credentials = Credentials.from_service_account_info(
+    SERVICE_ACCOUNT_INFO,
+    scopes=[
+        "https://www.googleapis.com/auth/spreadsheets",
+        "https://www.googleapis.com/auth/drive",
+    ],
+)
 client = gspread.authorize(credentials)
 
 # Define Google Sheet details
@@ -25,32 +26,35 @@ sheet = client.open_by_key(spreadsheet_id).worksheet(worksheet_name)
 # Fetch keywords from pytrends
 all_rising_keywords = []
 
-# Read your environment variables
-seed_topics = os.environ.get('NICHES', 'technology,finance,health').split(',')
-countries = os.environ.get('COUNTRY', 'US').split(',')
-spreadsheet_tab = os.environ.get('SPREADSHEET_TAB', 'Sheet1')
+# Set up pytrends
+pytrends = TrendReq()
 
-for topic in seed_topics:
-    pytrends.build_payload([topic], timeframe='now 7-d')
+# Load countries and niches from environment variables
+COUNTRIES = os.environ.get('COUNTRY', 'US,GB,IN').split(',')
+NICHES = os.environ.get('NICHES', 'technology,marketing').split(',')
 
-    try:
-        related_queries = pytrends.related_queries()
-
-        if related_queries and 'default' in related_queries and 'rankedList' in related_queries['default']:
-            ranked_list = related_queries['default']['rankedList']
-            if ranked_list and len(ranked_list) > 0 and 'rankedKeyword' in ranked_list[0]:
-                print("Related keywords found.")
-                # Your logic here (optional if needed)
+# Loop through all combinations
+for country in COUNTRIES:
+    for niche in NICHES:
+        search_topic = f"{niche} {country}"
+        pytrends.build_payload([search_topic], timeframe='now 7-d', geo=country)
+        try:
+            related_queries = pytrends.related_queries()
+            if (related_queries and 
+                'default' in related_queries and 
+                'rankedList' in related_queries['default'] and
+                len(related_queries['default']['rankedList']) > 0 and
+                'rankedKeyword' in related_queries['default']['rankedList'][0]):
+                print(f"Related keywords found for {search_topic}.")
             else:
-                print("No related keywords found for this search.")
-        else:
-            print("No data found for this keyword in this region.")
+                print(f"No related keywords found for {search_topic}.")
+                continue  # Skip if no related keywords
+        except Exception as e:
+            print(f"Error fetching related queries for {search_topic}: {e}")
+            continue
 
-    except Exception as e:
-        print(f"Error fetching related queries: {e}")
-        related_queries = pytrends.related_queries()
-        if related_queries and topic in related_queries:
-            rising = related_queries[topic].get('rising')
+        if search_topic in related_queries and 'rising' in related_queries[search_topic]:
+            rising = related_queries[search_topic]['rising']
             if rising is not None:
                 all_rising_keywords.extend(rising['query'].tolist())
 
@@ -60,3 +64,5 @@ all_rising_keywords = list(set(all_rising_keywords))
 # Push to Google Sheet
 for keyword in all_rising_keywords:
     sheet.append_row([keyword])
+
+print(f"✅ Successfully updated {len(all_rising_keywords)} keywords to Google Sheet.")
