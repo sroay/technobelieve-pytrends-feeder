@@ -30,10 +30,10 @@ niches = json.loads(os.environ.get('NICHES', '["travel technology"]'))
 # 🚀 Start fetching
 all_keywords = []
 
-# 💥 Force Crash Immediately After Setup (NEW)
-raise Exception("💥 Simulated Crash for Fast Testing Telegram Alert")
-
 try:
+    # 💥 Force Crash Immediately INSIDE try-block
+    raise Exception("💥 Simulated Crash for Fast Testing Telegram Alert")
+
     for country in countries:
         for niche in niches:
             pytrends.build_payload([niche], cat=0, timeframe='now 7-d', geo=country)
